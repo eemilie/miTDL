@@ -180,8 +180,10 @@ class Registro_de_activacion:
     tabla: {str, Tabla_de_simbolos}  # {str, Tabla_de_simbolos simbolo}
     locales: {} # mapa de locales del ra
     todos: List[Any] = []
+    num_params_func: int
+    cabeza_ra: []
 
-    def __init__(self, tamLocal, tamTemp, tamTotal, temporal, etiq, tabla, locales, todos ): #todos
+    def __init__(self, tamLocal, tamTemp, tamTotal, temporal, etiq, tabla, locales, todos, num_params_func, cabeza_ra): #todos
         self.tamLocal = tamLocal
         self.tamTemp = tamTemp
         self.tamTotal = tamTotal
@@ -190,6 +192,8 @@ class Registro_de_activacion:
         self.tabla = tabla
         self.locales = locales
         self.todos = todos              # ANHADIR EN ORDEN LAS COSAS EN EL MAPA TODOS
+        self.num_params_func = num_params_func          #para el paso de los params
+        self.cabeza_ra = cabeza_ra                      # para los pasos de los params
 
     def __str__(self):
         return f"Registro_de_activacion(tamLocal={self.tamLocal}, tamTemp={self.tamTemp}, tamTotal={self.tamTotal}, temporal={self.temporal}, etiq={self.etiq}, tabla={self.tabla}, locales={self.locales}, todos={self.todos})"
@@ -228,7 +232,9 @@ class Analizador_sintactico:
     count_ini = 1
     num_buc = 1
     entro_not = False
+    entro_not_asig = False
     viene_while = False
+    num_reg = 1
 
 
     def __init__(self, analizador_lexico: Analizador_lexico, gestor_errores, g_TS: GestorTS):
@@ -344,9 +350,9 @@ class Analizador_sintactico:
                 name = temp_selec.nombre
 
             if de == 'si':
-                self.emite(pr_rt, name, 'ra_de', '', lugar, desp)
+                self.emite(pr_rt, name, 'ra_de', tipo, lugar, desp)
             else:
-                self.emite(pr_rt, name, 'ra', '', lugar, desp)
+                self.emite(pr_rt, name, 'ra', tipo, lugar, desp)
 
 
         else:
@@ -389,18 +395,16 @@ class Analizador_sintactico:
         for i in range(len(lista)):
             if ra_o_de == 'de' and self.verificar_elemento(lista[i]):
                 if lista[i][0] == lug_if_id:
-                    condicion = lista[i][1]
                     desp = i
                     break
             elif ra_o_de == 'ra' and self.verificar_elemento(lista[i]):
                 if lista[i][0] == lug_if_id:
                     desp = i
-                    condicion = lista[i][1]
                     break
 
-        if condicion == 0:
+        if self.entro_not:
             condicion = 1
-        elif condicion == 1:
+        elif not self.entro_not:
             condicion = 0
 
         self.emite(if_o_while, lug_if_id, condicion, ra_o_de, desp, siguiente)
@@ -613,32 +617,38 @@ class Analizador_sintactico:
                 ''' TDL '''
                 if nr2.get_elems() == 0:  # if R2’.elems = 0 then begin
                     nr2.set_elems(1)  # R2.elems := 1
+                    nr.set_elems(nr2.get_elems())
                     nr2.set_lugarInt(nu.get_lugarInt())
                     nr2.lugar_lista.append(
                         nu.get_lugarInt())  # o lo pongo en la lista de lugares ??????????????????????????????????????????????????????????????????????????????????????????????
                 else:
                     #nr.lugar_lista += nu.get_lugarInt() # NO SERIA APPEND ?
-                    nr.lugar_lista.append(nr2.get_lugarInt())#nr.lugar_lista += nr2.get_lugarInt()
+                    id_pos = self.sig_token.atributo
+                    if id_pos == '':
+                        nr.lugar_lista.append(nr2.get_lugarInt())  # nr.lugar_lista += nr2.get_lugarInt()
+                    else:
+                        iddddd = self.buscarVarTs(id_pos)
+                        par_id_valor_r2 = (iddddd, nr2.get_lugarInt())
+                        nr.lugar_lista.append(par_id_valor_r2)#nr.lugar_lista += nr2.get_lugarInt()
                     nr.elems = 1 + nr2.get_elems()
 
-                    ''' esto  no va aqui '''
+                    ''' esto  no va aqui 
                     tempResta = temporales()
                     valorResta = nr2.get_lugarInt() - nu.get_lugarInt()
                     tempResta.valorInt = valorResta
 
                     tempResta.desp = self.gTS.get_last_simbolo().get_desp()
                     nr2.set_lugarInt(valorResta)
-                    ''' esto  no va aqui '''
+                    esto  no va aqui '''
 
-                ''' TDL '''
-                ''' TDL ANTES SIGUIENTE EL EDT 
-                if nr2.get_elems() == 0:  # if R2’.elems = 0 then begin
-                    nr.set_lugarInt(nu.get_lugarInt())  # R2.lugar := U.lugar
-                    nr.set_elems(1)  # R2.elems := 1
-                else:  # else begin
-                    # R2.lugar := U.lugar ⊕ R2’.lugar
-                    nr.set_elems(1 + nr2.get_elems())  # R2.elems := 1 + R2’.elems
-                TDL ANTES SIGUIENTE EL EDT '''
+                    ''' TDL ANTES SIGUIENTE EL EDT 
+                    if nr2.get_elems() == 0:  # if R2’.elems = 0 then begin
+                        nr.set_lugarInt(nu.get_lugarInt())  # R2.lugar := U.lugar
+                        nr.set_elems(1)  # R2.elems := 1
+                    else:  # else begin
+                        # R2.lugar := U.lugar ⊕ R2’.lugar
+                        nr.set_elems(1 + nr2.get_elems())  # R2.elems := 1 + R2’.elems
+                    TDL ANTES SIGUIENTE EL EDT '''
 
             else:
                 nr.set_tipo(Tipo.t_error)
@@ -650,8 +660,8 @@ class Analizador_sintactico:
             # Semantico
             nr.set_tipo(Tipo.t_ok)
             ''' TDL '''
-            nr.set_elems(0)  # R2.elems := 0
-            nr.set_lugarInt(None)
+            #nr.set_elems(0)  # R2.elems := 0
+            #nr.set_lugarInt(None)
             ''' R2. lugar := null  # como es lambda el lugar de bool no existe pero se tendria que ponerse a null 
 
             '''
@@ -689,13 +699,132 @@ class Analizador_sintactico:
                 #nr.lugar_lista.append(nu.get_lugarInt())
                 # o lo pongo en la lista
             else:  # else begin
-                for i in range(nr2.get_elems()):  # nr2.lugar_lista(): ????????????????????
-                    nr2.lugar_lista.append(nu.get_lugarInt())
-                    nr.lugar_lista.append(nr2.lugar_lista[i])
+                #nr2.lugar_lista.append(nu.get_lugarInt())
+                #nr.lugar_lista.extend(nr2.lugar_lista)
+                nr.lugar_lista.append(nu.get_lugarInt())
+
+                tempResta = temporales()
+                nulo = False
+                id_sum1 = None
+                id_sum2 = None
+                if self.verificar_elemento(nr2.lugar_lista[len(nr2.lugar_lista)-1]):
+                    elem1 = nr2.lugar_lista[len(nr2.lugar_lista)-1][1]
+                    id_sum1 = nr2.lugar_lista[len(nr2.lugar_lista) - 1][0]
+                else:
+                    elem1 = nr2.lugar_lista[len(nr2.lugar_lista) - 1]
+                if self.verificar_elemento(nr2.lugar_lista[len(nr2.lugar_lista) - 2]):
+                    elem2 = nr2.lugar_lista[len(nr2.lugar_lista)-2][1]
+                    id_sum2 = nr2.lugar_lista[len(nr2.lugar_lista)-2][0]
+                else:
+                    elem2 = nr2.lugar_lista[len(nr2.lugar_lista) - 2]
+
+                if elem1 == None or elem2 == None:
+                    elem1 = 000
+                    elem2 = 000
+                    nulo = True
+                    tempResta.valorInt = -10000
+                else:
+                    tempResta.valorInt = int(elem1) - int(elem2)
+
+                nr.set_lugarInt(tempResta.valorInt)
+
+
+                if self.es_ra():
+                    #anadir la temporal al ra: en todos y temps
+                    self.ra.todos.append(tempResta)
+                    #para poner la temp bien
+                    for i in range(len(self.ra.todos)):
+                        teemp = self.ra.todos[i]
+                        if isinstance(teemp, temporales) and teemp.valorInt == tempResta.valorInt or isinstance(teemp, temporales) and nulo and teemp.valorInt == tempResta.valorInt:
+                            desp = i
+                            count = len(self.ra.temporal)
+                            nombre = tempResta.nombre + str(count)
+                            tempAux = temporales()
+                            tempAux.nombre = nombre
+                            tempAux.desp = desp
+                            tempAux.count = count
+                            tempAux.valorInt = tempResta.valorInt
+                            self.ra.todos[i] = tempAux
+                            self.ra.temporal[tempAux.nombre] = tempAux.valorInt
+                            break
+                    # buscamos el desp de elem1
+                    resta_de_o_ra = 'RESTARA'
+                    encontrado1 = False
+                    encontrado2 = False
+                    for i in range(len(self.ra.todos)):
+                        temid = self.ra.todos[i]
+                        if self.verificar_elemento(temid) and temid[1] == elem1 or self.verificar_elemento(temid) and id_sum1 != None and temid[0] == id_sum1:
+                            despE1 = i
+                            encontrado1 = True
+                            break
+
+                    if not encontrado1:
+                        for i in range(len(self.de.temps)):
+                                if self.verificar_elemento(self.de.temps[i]) and self.de.temps[i][1] == elem1 or self.verificar_elemento(self.de.temps[i]) and id_sum1 != None and self.de.temps[i][0] == id_sum1:
+                                    despE1 = i
+                                    resta_de_o_ra = 'RESTARADE1'
+                                    encontrado1 = True
+                                    break
+                    if not encontrado1:
+                        for i in range(len(self.ra.todos)):
+                            if isinstance(self.ra.todos[i], temporales) and self.ra.todos[i].valorInt == elem1:
+                                despE1 = i
+                                break
+
+                    # buscamos el desp de elem2
+                    for i in range(len(self.ra.todos)):
+                        temid = self.ra.todos[i]
+                        if self.verificar_elemento(temid) and temid[1] == elem2 or self.verificar_elemento(temid) and id_sum2 != None and temid[0] == id_sum2:
+                            despE2 = i
+                            encontrado2 = True
+                            break
+
+                    if not encontrado2:
+                        for i in range(len(self.de.temps)):
+                            if  self.verificar_elemento(self.de.temps[i]) and self.de.temps[i][1] == elem2 or self.verificar_elemento(self.de.temps[i]) and id_sum2 != None and self.de.temps[i][0] == id_sum2:
+                                despE2 = i
+                                encontrado2 = True
+                                if resta_de_o_ra == 'RESTARADE1':
+                                    resta_de_o_ra = 'RESTARADE3'
+                                else:
+                                    resta_de_o_ra = 'RESTARADE2'
+                                break
+                    if not encontrado2:
+                        for i in range(len(self.ra.todos)):
+                            if isinstance(self.ra.todos[i], temporales) and self.ra.todos[i].valorInt == elem2:
+                                despE2 = i
+                                break
+
+                    #self.ra.temporal[]
+                    # emitir la temporal de la rest
+                    self.emite(tempAux.nombre, 'igResta', elem1, desp , elem2, '')
+                    self.cuarteto(despE1,despE2, resta_de_o_ra,'',24)
+                    self.cuarteto('RESTARA', desp, '','', 25)
+                else:
+                    #anadir la temporal en todos y en temps
+                    #tempResta.count = tempResta.count + 1
+                    self.de.temps.append(tempResta)
+                    for i in range(len(self.de.temps)):
+                        if isinstance(self.de.temps[i], temporales) and self.de.temps[i] == tempResta.valorInt:
+                            desp = i
+                            count = len(self.de.temps) + 1
+                            nombre = tempResta.nombre + str(count)
+                            tempAux = temporales()
+                            tempAux.nombre = nombre
+                            tempAux.desp = desp
+                            tempAux.count = count
+                            tempAux.valorInt = tempResta.valorInt
+                            self.de.temps[i] = tempAux
+                    # emitir la temporal de la rest
+                    self.emite(tempAux.nombre, 'igResta', elem1, '-', elem2, 'RESTADE')
+                    #self.cuarteto()
+
+                for i in range(2,nr2.get_elems()):  # nr2.lugar_lista(): ????????????????????
                     # emite(R.lugar, ‘:=’, U.lugar, ‘-’, R2.lugar[1]) ??????????????????????????????????????????????
                     quevale = i % 2
                     if i % 2 == 0:
-                        tempResta = temporales()
+                        self.emite(tempResta.nombre, 'igResta', nr.get_lugarInt(), '-', nr2.lugar_lista[i], 'RESTA')
+
 
                         '''
                         # si existe el RA
@@ -786,6 +915,7 @@ class Analizador_sintactico:
             self.register(42)
             self.equipara('not')
             self.entro_not = True
+            self.entro_not_asig = True
             v = self.v()
 
             # Semantico
@@ -815,8 +945,10 @@ class Analizador_sintactico:
                                 break
                         self.emite(v.lugar_if_id[0], ':=', 'not', v.get_lugarBool(), desp, 'de')
 
+
                 ''' TDL '''
                 #self.viene_while = False
+
 
             else:
                 u.set_tipo(Tipo.t_error)
@@ -897,7 +1029,39 @@ class Analizador_sintactico:
                     nv1.set_tipo(Tipo.t_error)
                     self.gestor_errores.addError(8, self.analizador_lexico.contador_linea)
                 else:
-                    self.emite('param', nl.param[i], '', '', '','')
+                    #buscamos el ra de la funcion que llamamos:
+                    #buscamos lo que viene antes del param:
+                    miPARAM = nl.param[i]
+                    antes = 0
+                    desp_param = 0
+                    donde = 'ra'
+                    encontrado_en_ra = False
+                    if i == 0:
+                        antes = 1
+                    #buscamos el desp del param:
+                    for p in range(len(self.ra.todos)):
+                        elem = self.ra.todos[p]
+                        if self.verificar_elemento(elem) and elem[0] == miPARAM:
+                            desp_param = p
+                            encontrado_en_ra = True
+                        elif isinstance(elem, temporales) and nl.tipo[i] == Tipo.t_int and elem.valorInt == miPARAM:
+                            desp_param = p
+                            encontrado_en_ra = True
+                        elif isinstance(elem, temporales) and nl.tipo[i] == Tipo.t_bool and elem.valorB == miPARAM:
+                            desp_param = p
+                            encontrado_en_ra = True
+                        elif isinstance(elem, temporales) and nl.tipo[i] == Tipo.t_str and elem.valorStr == miPARAM:
+                            desp_param = p
+                            encontrado_en_ra = True
+
+                    if not encontrado_en_ra:
+                        for j in range(len(self.de.temps)):
+                            idd = self.de.temps[j]
+                            if self.verificar_elemento(idd) and idd[0] == nl.param[i]:
+                                desp_param = j
+                                donde = 'ra_de'
+
+                    self.emite('param', nl.param[i], desp_param, antes, donde,'')
 
         # Caso de lambda
         elif self.sig_token.codigo in follow['V1']:
@@ -936,7 +1100,8 @@ class Analizador_sintactico:
             # establece como tipo a nv el tipo de retorno la funcion o el tipo de la variable si no es una funcion
             if nv.get_tipo() == Tipo.t_funcion:
                 retorno = self.gTS.buscarTipoRet(id_pos)
-                nv.set_tipo(retorno)
+                #nv.set_tipo(retorno)
+                nv.set_tipoRet(retorno)
             elif nv1.get_tipo() != Tipo.t_error:
                 nv.set_tipo(self.gTS.buscarTipo(id_pos))
                 ''' TDL '''
@@ -946,7 +1111,10 @@ class Analizador_sintactico:
                     antiguo_valor = self.get_lugar_id(id_pos)
 
                     tempPostInt = temporales()
-                    valorPost = int(antiguo_valor) + 1
+                    if antiguo_valor != None:
+                        valorPost = int(antiguo_valor) + 1
+                    else:
+                        valorPost = 'INC PARAM'
                     # valorPost = self.buscarLugarTS(id_pos) + 1
                     tempPostInt.valorInt = valorPost
                     tempPostInt.desp = len(self.ra.temporal) #self.ra.tamTemp
@@ -1011,12 +1179,13 @@ class Analizador_sintactico:
                 elif nv1.get_tipo() == Tipo.t_ok:
                     miIDD = self.buscarVarTs(id_pos)
                     if nv.get_tipo() == Tipo.t_int:
-                        nv.set_lugarInt(self.get_lugar_id(id_pos))
                         par_id_valor = (miIDD, self.get_lugar_id(id_pos))
+                        nv.set_lugarInt(par_id_valor)
                         nv.lugar_pr_id = par_id_valor
                         nv.lugar_rt_id = par_id_valor
                     if nv.get_tipo() == Tipo.t_bool:
                         valor_id = self.get_lugar_id(id_pos)
+
 
                         if self.entro_not and not self.viene_while:
                             if valor_id == 0:
@@ -1275,17 +1444,31 @@ class Analizador_sintactico:
         nl = Nodo()
 
         # Caso de lista de parametros de funcion
-        id_pos = self.sig_token.atributo
         if self.sig_token.codigo in first['E']:
             # Sintactico
+            es_id = False
             self.register(32)
             for posible in first['E']:
                 if self.sig_token.codigo == posible:
+                    if posible == 'id':
+                        id_pos = self.sig_token.atributo
+                        es_id = True
                     nl = self.e()
                     break
 
             ''' TDL '''
-            nl.param.append(self.get_lugar_id(id_pos))
+            nl.param.clear()
+            #nl.param.append(self.get_lugar_id(id_pos))
+            if es_id:
+                nl.param.append(self.buscarVarTs(id_pos))
+            else:
+                if nl.tipo[0] == Tipo.t_int:
+                    nl.param.append(nl.get_lugarInt())
+                elif nl.tipo[0] == Tipo.t_bool:
+                    nl.param.append(nl.get_lugarBool())
+                elif nl.tipo[0] == Tipo.t_str:
+                    nl.param.append(nl.get_lugarStr())
+
             nl.long = 1
 
             '''
@@ -1299,7 +1482,7 @@ class Analizador_sintactico:
             nq = self.q()
             nl.tipo += nq.tipo
 
-            nl.param += nq.param
+            nl.param = nq.param
             nl.long = nl.long + nq.long
 
             ''' TDL '''
@@ -1466,7 +1649,7 @@ class Analizador_sintactico:
                 valor = self.buscarEtiqTs(id_pos)
                 self.emite('call', self.buscarEtiqTs(id_pos), '', '', '','')
 
-            elif ns1.get_asig() == 'asig' and ns1.get_post() != 'postAsig' and not self.entro_not:
+            elif ns1.get_asig() == 'asig' and ns1.get_post() != 'postAsig' and not self.entro_not_asig:
                 if ns.get_tipo() == Tipo.t_int:
                     valorHH = ns1.get_lugarInt()
                     self.set_lugar_id(id_pos, valorHH)
@@ -1500,20 +1683,11 @@ class Analizador_sintactico:
                         for i in range(len(self.de.temps)):
                             if self.verificar_elemento(self.de.temps[i]) and self.de.temps[i][0] == parid[0]:
                                 despV = i
-                                valorV = self.de.temps
+                                valorV = self.de.temps[i][0]
                                 self.de.temps[i] = parid
                                 break
 
                         #self.de.temps.append(parid)
-
-                        '''
-                        for i in range(len(self.de.temps)):
-                            if self.de.temps[i] == self.buscarVarTs(id_pos):
-                                despV = i
-                                valorV = self.de.temps[i]
-                                break
-                        '''
-
 
                         self.emite('temp', '3', valorV, temppp, despT, despV)
 
@@ -1553,7 +1727,7 @@ class Analizador_sintactico:
                         for i in range(len(self.de.temps)):
                             if self.verificar_elemento(self.de.temps[i]) and self.de.temps[i][0] == parid[0]:
                                 despV = i
-                                valorV = self.de.temps
+                                valorV = self.de.temps[i]
                                 self.de.temps[i] = parid
                                 break
 
@@ -1597,14 +1771,15 @@ class Analizador_sintactico:
                         #si no esta en ra lo busco en de
                         if not encontrado_ra:
                             for i in range(len(self.de.temps)):
-                                despV = i
-                                valorV = self.de.temps
-                                nuevopar = (parid[0], ns1.get_lugarStr()[1])
-                                self.de.temps[i] = nuevopar
-                                otroPar = (self.de.locales[parid[0]][0], ns1.get_lugarStr()[1])
-                                self.de.locales[parid[0]] = otroPar
-                                prim = 'tempde'
-                                break
+                                valorV = self.de.temps[i]
+                                if self.verificar_elemento(valorV) and valorV[0] == parid[0]:
+                                    despV = i
+                                    nuevopar = (parid[0], ns1.get_lugarStr()[1])
+                                    self.de.temps[i] = nuevopar
+                                    otroPar = (self.de.locales[parid[0]][0], ns1.get_lugarStr()[1])
+                                    self.de.locales[parid[0]] = otroPar
+                                    prim = 'tempde'
+                                    break
 
                         self.emite(prim, '2', self.buscarVarTs(id_pos), temppp, despT, despV)
 
@@ -1653,7 +1828,6 @@ class Analizador_sintactico:
 
 
                 ns1.set_asig('')
-                self.entro_not = False
 
             elif ns.get_tipo() == Tipo.t_ok:  #
                 if ns.get_tipo() == Tipo.t_int:
@@ -1710,6 +1884,8 @@ class Analizador_sintactico:
 
             ''' TDL '''
             #id_pos = self.sig_token.atributo
+            nombre_reg = 'R'+str(self.num_reg)
+            self.num_reg += 1
 
             if self.es_ra():
                 for i in range(len(self.ra.todos)):
@@ -1721,7 +1897,7 @@ class Analizador_sintactico:
                         tipo = self.ra.locales[clave][0]
                         break
 
-                self.emite('input', self.buscarVarTs(id_pos), desp, 'ra', tipo, '')
+                self.emite('input', self.buscarVarTs(id_pos), desp, 'ra', tipo, nombre_reg)
 
             else:
                 for i in range(len(self.de.temps)):
@@ -1733,7 +1909,7 @@ class Analizador_sintactico:
                         tipo = self.de.locales[clave][0]
                         break
 
-                self.emite('input', self.buscarVarTs(id_pos), desp, 'de', tipo, '')
+                self.emite('input', self.buscarVarTs(id_pos), desp, 'de', tipo, nombre_reg)
 
             ''' TDL '''
 
@@ -1770,6 +1946,9 @@ class Analizador_sintactico:
             self.error(self.helper_error_msg(first['S']))
             ns.set_tipo(Tipo.t_error)
             ns.tipoRetorno = ns.get_tipo()
+
+        self.entro_not_asig = False
+        self.entro_not = False
 
         return ns
 
@@ -1884,7 +2063,7 @@ class Analizador_sintactico:
                     self.id_if_while(self.de.temps, nb.get_siguiente(), 'de', ne.lugar_if_id[0], 'if')
 
                 ''' TDL '''
-
+            self.entro_not = False
             ns = self.s()
             nb.set_tipo(ns.get_tipo())
 
@@ -2042,13 +2221,22 @@ class Analizador_sintactico:
             self.gTS.insertarTipoParam(id_pos, na.tipo)
 
             ''' TDL '''
-            self.ra = Registro_de_activacion(0,0,1,{},self.buscarEtiqTs(id_funcion),{}, {},[])
+            self.ra = Registro_de_activacion(0,0,1,{},self.buscarEtiqTs(id_funcion),{}, {},[],0,[])
             self.ra.todos.append('EM')
-            for i in range(na.long):
+            par_EM = ('EM', 1)
+            self.ra.cabeza_ra.append(par_EM)
+            for i in range(len(na.param)):
                 self.ra.locales[na.param[i]] = None
                 par_param = (na.param[i], None)
                 self.ra.todos.append(par_param)
                 self.ra.tamLocal += 1
+                self.hashmap[na.param[i]] = None
+                if na.tipo[i] == Tipo.t_str:
+                    desp_tipo = 32
+                else:
+                    desp_tipo = 1
+                par_cab = (na.param[i], desp_tipo)
+                self.ra.cabeza_ra.append(par_cab)
 
             self.ra.tamTotal = self.ra.tamLocal + self.ra.tamTotal
             iduhwd = id_funcion
@@ -2078,12 +2266,13 @@ class Analizador_sintactico:
             self.ra.tamTotal = self.ra.tamLocal + self.ra.tamTemp
             print( 'RA FINAAAL : ' ,self.ra.__str__())
 
-            par = (self.ra.etiq,self.ra.tamTotal)
+            par = (self.ra.etiq, self.ra)
 
             self.ras.append(par)
 
             ''' REINICILIZAR EL RA '''
             self.ra = None
+            na.param = []
 
             if nc.get_tipoRet() == nh.get_tipo():
                 nf.set_tipo(Tipo.t_ok)
@@ -2126,6 +2315,7 @@ class Analizador_sintactico:
         na = Nodo()
 
         # lista no vacia
+        na.param = []
         if self.sig_token.codigo in first['T']:
             # Sintactico
             self.register(9)
@@ -2150,7 +2340,7 @@ class Analizador_sintactico:
                     ''' TDL -> INITILLLLLLLLLLLLLLLLLLLLLLLLLLLLL ??????????????????'''
                     # na.param += nk.param  # concatenación de las listas
                     # na.set_long(na.get_long() + nk.get_long())
-                    na.param = nk.param
+                    na.param.extend(nk.param)
                     na.long = na.long + nk.long
 
                     break
@@ -2181,7 +2371,7 @@ class Analizador_sintactico:
             self.gTS.insertarDesp(id_pos, nt.get_tam())
 
             nk.param.append(self.buscarVarTs(id_pos))
-            nk.long = 1
+            nk.long += 1
 
             # Sintactico
             nk1 = self.k()
@@ -2287,10 +2477,47 @@ class Analizador_sintactico:
                 self.cuarteto(self.etiq_cadenas[i][1], self.etiq_cadenas[i][0], '', '', 101)
             for i in range(len(self.ras)):
                 naame = "tam_RA_"+str(self.ras[i][0])
-                self.cuarteto(naame,self.ras[i][1], '', '', 103)
+                tam = 0
+                ra_now = self.ras[i][1]
+                for i in range(len(ra_now.cabeza_ra)):
+                    tam += ra_now.cabeza_ra[i][1]
+
+                claves_loc = list(ra_now.locales)
+                p = 0
+                lista_aux = []
+                for i in range(len(ra_now.cabeza_ra)-1, len(claves_loc)):
+                    lista_aux.append(claves_loc[i])
+                    p += 1
+
+                for i in range(len(lista_aux)):
+                    clave = lista_aux[i]
+                    valor = ra_now.locales[clave]
+                    if isinstance(valor, str) and valor.isdigit() or isinstance(valor, int):
+                        tam += 1
+                    else:
+                        tam += 32
+
+                for clave in ra_now.temporal:
+                    temp_valor = ra_now.temporal[clave]
+                    if isinstance(temp_valor, str) and temp_valor.isdigit() or isinstance(temp_valor, int):
+                        tam += 1
+                    else:
+                        tam += 32
+
+                self.cuarteto(naame, tam, '', '', 103)
+                #self.ras[i][1]
 
             if hasattr(self, 'de') and isinstance(self.de, datos_estaticos):
-                self.cuarteto(len(self.de.temps), '', '', '', 102)
+                tam_de = 0
+                for i in range(len(self.de.temps)):
+                    elem = self.de.temps[i]
+                    if self.verificar_elemento(elem) and isinstance(elem[1], int) or self.verificar_elemento(elem) and isinstance(elem[1], str) and elem[1].isdigit():
+                        tam_de += 1
+                    elif isinstance(elem, temporales) and elem.valorStr == '' or isinstance(elem, temporales) and elem.valorStr == None:
+                        tam_de += 1
+                    else:
+                        tam_de += 32
+                self.cuarteto(tam_de, '', '', '', 102)
             else:
                 self.cuarteto('', '', '', '', 102)
 
@@ -2379,14 +2606,17 @@ class Analizador_sintactico:
                 f.write(f"print  {string2}  \n")
 
             # llamamos a cuarteto
-            self.cuarteto(string3, string2, string5, string6, cod)
+            if string5 == 'string':
+                self.cuarteto(string3, string2, string5, string6, cod)
+            else:
+                self.cuarteto(string3, string4, string5, string6, cod)
 
         if string == 'input':
             with open('./output/emites.txt', 'a') as f:
                 f.write(f"(input,_,_, {string2})\n")
 
             cod = 5
-            self.cuarteto(string3, string4, string5, '', cod)
+            self.cuarteto(string3, string4, string5, string6, cod)
 
         if string2 == ':=' and string3 == 'call':
             with open('./output/emites.txt', 'a') as f:
@@ -2410,7 +2640,7 @@ class Analizador_sintactico:
                 f.write(f"param {string2} ( o temp no se) )\n")
 
             cod = 7
-            self.cuarteto(string, string2, '', '', cod)
+            self.cuarteto(string, string2, string3, string4, cod)
 
         if string2 == '<':
             cod = 8
@@ -2445,9 +2675,16 @@ class Analizador_sintactico:
                 f.write(f"temp := {string3} -  {string5} \n")
             with open('./output/GCI.txt', 'a') as f:
                 f.write(f"{string} := temp )\n")
-
             # llamamos a cuarteto
             self.cuarteto('-', string3, string5, string, cod)
+
+        if string2 == 'igResta':
+            cod = 24
+            with open('./output/emites.txt', 'a') as f:
+                f.write(f"(-,{string},{string5},{string})\n")
+
+            #self.cuarteto(string3, string4, string5, string6, cod)
+
 
         if string2 == ':=' and string4 == '<':
             cod = 11
@@ -2618,11 +2855,11 @@ class Analizador_sintactico:
 
 
             else:
-                if string3 == 'string':
+                if string3 == 'string' or string2 == Tipo.t_str:
                     with open('./output/CO.ens', 'a') as f:
                         f.write(f"  WRSTR /{string2}\n")
 
-                elif isinstance(string3, str) and string3[0].isdigit() or isinstance(string3, int):
+                elif isinstance(string3, str) and string3[0].isdigit() or isinstance(string3, int) or string2 == Tipo.t_int or string2 == Tipo.t_bool:
                     with open('./output/CO.ens', 'a') as f:
                         f.write(f"  WRINT #{string4}[.IX]\n")
 
@@ -2631,14 +2868,16 @@ class Analizador_sintactico:
             if string2 == 'ra':
                 if string3[0].isdigit():
                     with open('./output/CO.ens', 'a') as f:
-                        f.write(f"  ININT #{string1}[.IX]\n")
+                        f.write(f"  ININT .{string4}\n")
+                        f.write(f"  MOVE .[{string4}], #{string1}[.IX]\n")
                 else:
                     with open('./output/CO.ens', 'a') as f:
                         f.write(f"  INSTR #{string1}[.IX]\n")
             else:
                 if string3 == Tipo.t_int or string3 == Tipo.t_bool:
                     with open('./output/CO.ens', 'a') as f:
-                        f.write(f"  ININT #{string1}[.IY]\n")
+                        f.write(f"  ININT .{string4}\n")
+                        f.write(f"  MOVE .[{string4}], #{string1}[.IY]\n")
                 else:
                     with open('./output/CO.ens', 'a') as f:
                         f.write(f"  INSTR #{string1}[.IY]\n")
@@ -2661,8 +2900,8 @@ class Analizador_sintactico:
             # param
             with open('./output/CO.ens', 'a') as f:
                 f.write(f"  ADD #tam_RA_{self.ra.etiq}, .IX     ; params \n")
-                f.write(f"  ADD #num_param, .A      ; params  \n")
-                f.write(f"  MOVE #{string2}, [.A]       ; params  \n")
+                f.write(f"  ADD #{string4}, .A      ; params  \n")
+                f.write(f"  MOVE #{string3}[.IX], [.A]       ; params  \n")
 
         if cod == 8:
             # menor
@@ -2751,11 +2990,33 @@ class Analizador_sintactico:
             with open('./output/CO.ens', 'a') as f:
                 f.write(f"  MOVE #{string3}[.IY], #{string4}[.IY] ;ERES TUU\n") # aqui seriaaa he inversado los desp
 
-
-
         if cod == 19:
             with open('./output/CO.ens', 'a') as f:
                 f.write(f"  MOVE #{string2}, #{string4}[.IY] \n")
+
+        if cod == 24:
+            if string3 == 'RESTARA':
+                with open('./output/CO.ens', 'a') as f:
+                    f.write(f"  SUB #{string1}[.IX], #{string2}[.IX] \n")
+            if string3 == 'RESTARADE1':
+                with open('./output/CO.ens', 'a') as f:
+                    f.write(f"  SUB #{string1}[.IY], #{string2}[.IX] \n")
+            if string3 == 'RESTARADE2':
+                with open('./output/CO.ens', 'a') as f:
+                    f.write(f"  SUB #{string1}[.IX], #{string2}[.IY] \n")
+            if string3 == 'RESTARADE3':
+                with open('./output/CO.ens', 'a') as f:
+                    f.write(f"  SUB #{string1}[.IY], #{string2}[.IY] \n")
+
+        if cod == 25:
+            if string1 == 'RESTARA':
+                with open('./output/CO.ens', 'a') as f:
+                    f.write(f"  MOVE .A, #{string2}[.IX] \n")
+            else:
+                with open('./output/CO.ens', 'a') as f:
+                    f.write(f"  MOVE .A, #{string2}[.IY] \n")
+
+
 
         '''
         if cod == 20:
