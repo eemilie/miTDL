@@ -1215,7 +1215,8 @@ class Analizador_sintactico:
                     if antiguo_valor != None:
                         valorPost = int(antiguo_valor) + 1
                     else:
-                        valorPost = 'INC PARAM'
+                        valorPost = 'INC PARAM'#self.buscarVarTs(id_pos)
+                        antiguo_valor = self.buscarVarTs(id_pos)
                     # valorPost = self.buscarLugarTS(id_pos) + 1
                     tempPostInt.valorInt = valorPost
                     tempPostInt.desp = len(self.ra.temporal) #self.ra.tamTemp
