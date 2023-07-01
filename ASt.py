@@ -54,6 +54,8 @@ class Nodo:
     lugar_pr_id =  None
     lugar_rt_id = None
     #entro_not = False
+    id_func = ''
+    pasar_param = None
 
 
     def __init__(self):
@@ -182,8 +184,9 @@ class Registro_de_activacion:
     todos: List[Any] = []
     num_params_func: int
     cabeza_ra: []
+    VD = None
 
-    def __init__(self, tamLocal, tamTemp, tamTotal, temporal, etiq, tabla, locales, todos, num_params_func, cabeza_ra): #todos
+    def __init__(self, tamLocal, tamTemp, tamTotal, temporal, etiq, tabla, locales, todos, num_params_func, cabeza_ra, VD): #todos
         self.tamLocal = tamLocal
         self.tamTemp = tamTemp
         self.tamTotal = tamTotal
@@ -194,6 +197,7 @@ class Registro_de_activacion:
         self.todos = todos              # ANHADIR EN ORDEN LAS COSAS EN EL MAPA TODOS
         self.num_params_func = num_params_func          #para el paso de los params
         self.cabeza_ra = cabeza_ra                      # para los pasos de los params
+        self.VD = VD
 
     def __str__(self):
         return f"Registro_de_activacion(tamLocal={self.tamLocal}, tamTemp={self.tamTemp}, tamTotal={self.tamTotal}, temporal={self.temporal}, etiq={self.etiq}, tabla={self.tabla}, locales={self.locales}, todos={self.todos})"
@@ -235,6 +239,8 @@ class Analizador_sintactico:
     entro_not_asig = False
     viene_while = False
     num_reg = 1
+    count_diret = 1
+    nummm = 1
 
 
     def __init__(self, analizador_lexico: Analizador_lexico, gestor_errores, g_TS: GestorTS):
@@ -293,6 +299,53 @@ class Analizador_sintactico:
             return True
         else:
             return False
+
+    def asig_func(self, tipo, func, id_ig):
+        # ns.set_lugarInt() -> poner el .lugar al tipo de retorno de la func ??
+        # se pone la llamada en una temp
+        tempCall = temporales()
+        # anadimos al mapa de temps y a todos
+        tempCall.valorInt = 'call_' + str(func)
+        tempCall.count = len(self.ra.temporal) + 1
+        tempCall.nombre = tempCall.nombre + str(tempCall.count + 1)
+        tempCall.desp = len(self.ra.todos) + 1
+        self.ra.todos.append(tempCall)
+        if tipo == Tipo.t_int:
+            self.ra.temporal[tempCall.nombre] = tempCall.valorInt
+        elif tipo == Tipo.t_bool:
+            self.ra.temporal[tempCall.nombre] = tempCall.valorB
+        elif tipo == Tipo.t_str:
+            self.ra.temporal[tempCall.nombre] = tempCall.valorStr
+        encontrado_ra = False
+        cosa = 'ra'
+
+        for i in range(len(self.ra.todos)):
+            if isinstance(self.ra.todos[i], temporales) and tipo == Tipo.t_int and self.ra.todos[i].valorInt == tempCall.valorInt:
+                despT = i
+                break
+            elif isinstance(self.ra.todos[i], temporales) and tipo == Tipo.t_bool and self.ra.todos[i].valorInt == tempCall.valorB:
+                despT = i
+                break
+            elif isinstance(self.ra.todos[i], temporales) and tipo == Tipo.t_bool and self.ra.todos[i].valorInt == tempCall.valorStr:
+                despT = i
+                break
+
+        for i in range(len(self.ra.todos)):
+            if self.verificar_elemento(self.ra.todos[i]) and self.ra.todos[i][0] == id_ig:
+                despV = i
+                encontrado_ra = True
+                break
+
+        if encontrado_ra == False:
+            for i in range(len(self.de.temps)):
+                if self.verificar_elemento(self.de.temps[i]) and self.de.temps[i][0] == id_ig:
+                    despV = i
+                    cosa = 'de'
+                    break
+
+        # ponemos la temp a nuestro id
+        self.emite('callAsig1', cosa, id_ig, func, despV, despT)  # aqui busca la etiqueta/nombre de la funcion
+
 
     def cosa_para_pr_rt(self, tipo, lugar, lugar_id, pr_rt):
         si = 0
@@ -550,6 +603,7 @@ class Analizador_sintactico:
             ne.lugar_if_id = nr.lugar_if_id
             ne.lugar_pr_id = nr.lugar_pr_id
             ne.lugar_rt_id = nr.lugar_rt_id
+            ne.pasar_param = nr.pasar_param
             ''' TDL '''
 
         elif nr.get_tipo() == Tipo.t_int and ne1.get_tipo() == Tipo.t_ok:  # cuando r es int y no hay nada mas
@@ -561,6 +615,7 @@ class Analizador_sintactico:
                 ne.set_post(nr.get_post())
                 ne.lugar_pr_id = nr.lugar_pr_id
                 ne.lugar_rt_id = nr.lugar_rt_id
+                ne.pasar_param = nr.pasar_param
                 ne.set_elems(1)
             else:
                 # self.emite(ne.get_lugarBool(), ':=', nr.get_lugarInt(), '<', E2.lugar[1])
@@ -591,9 +646,13 @@ class Analizador_sintactico:
             ne.set_lugarStr(nr.lugarStr)
             ne.lugar_pr_id = nr.lugar_pr_id
             ne.lugar_rt_id = nr.lugar_rt_id
+            ne.pasar_param = nr.pasar_param
             ''' CAMBIO MIOOOO NO SE SI ESTARA BIEBN'''
 
-
+        elif nr.get_tipo() == Tipo.t_funcion and ne1.get_tipo() == Tipo.t_ok:
+            ne.set_tipo(nr.get_tipo())
+            ne.set_tipoRet(nr.get_tipoRet())
+            ne.id_func = nr.id_func
 
 
         else:
@@ -696,6 +755,7 @@ class Analizador_sintactico:
                 nr.set_post(nu.get_post())
                 nr.lugar_pr_id = nu.lugar_pr_id
                 nr.lugar_rt_id = nu.lugar_rt_id
+                nr.pasar_param = nu.pasar_param
                 #nr.lugar_lista.append(nu.get_lugarInt())
                 # o lo pongo en la lista
             else:  # else begin
@@ -718,7 +778,15 @@ class Analizador_sintactico:
                 else:
                     elem2 = nr2.lugar_lista[len(nr2.lugar_lista) - 2]
 
-                if elem1 == None or elem2 == None:
+                if elem1 == None:
+                    elem1 = 000
+                    nulo = True
+                    tempResta.valorInt = -10000
+                elif elem2 == None:
+                    elem2 = 000
+                    nulo = True
+                    tempResta.valorInt = -10000
+                elif elem2 == None and elem2 == None:
                     elem1 = 000
                     elem2 = 000
                     nulo = True
@@ -756,6 +824,7 @@ class Analizador_sintactico:
                         if self.verificar_elemento(temid) and temid[1] == elem1 or self.verificar_elemento(temid) and id_sum1 != None and temid[0] == id_sum1:
                             despE1 = i
                             encontrado1 = True
+                            elem1 = temid[0]
                             break
 
                     if not encontrado1:
@@ -764,11 +833,13 @@ class Analizador_sintactico:
                                     despE1 = i
                                     resta_de_o_ra = 'RESTARADE1'
                                     encontrado1 = True
+                                    elem1 = self.de.temps[i][0]
                                     break
                     if not encontrado1:
                         for i in range(len(self.ra.todos)):
                             if isinstance(self.ra.todos[i], temporales) and self.ra.todos[i].valorInt == elem1:
                                 despE1 = i
+                                elem1 = self.todos[i].nombre
                                 break
 
                     # buscamos el desp de elem2
@@ -777,6 +848,7 @@ class Analizador_sintactico:
                         if self.verificar_elemento(temid) and temid[1] == elem2 or self.verificar_elemento(temid) and id_sum2 != None and temid[0] == id_sum2:
                             despE2 = i
                             encontrado2 = True
+                            elem2 = temid[0]
                             break
 
                     if not encontrado2:
@@ -784,6 +856,7 @@ class Analizador_sintactico:
                             if  self.verificar_elemento(self.de.temps[i]) and self.de.temps[i][1] == elem2 or self.verificar_elemento(self.de.temps[i]) and id_sum2 != None and self.de.temps[i][0] == id_sum2:
                                 despE2 = i
                                 encontrado2 = True
+                                elem2 = self.de.temps[i][0]
                                 if resta_de_o_ra == 'RESTARADE1':
                                     resta_de_o_ra = 'RESTARADE3'
                                 else:
@@ -793,6 +866,7 @@ class Analizador_sintactico:
                         for i in range(len(self.ra.todos)):
                             if isinstance(self.ra.todos[i], temporales) and self.ra.todos[i].valorInt == elem2:
                                 despE2 = i
+                                elem2 = self.ra.todos[i].nombre
                                 break
 
                     #self.ra.temporal[]
@@ -887,6 +961,7 @@ class Analizador_sintactico:
             nr.lugar_if_id = nu.lugar_if_id
             nr.lugar_rt_id = nu.lugar_rt_id
             nr.lugar_pr_id = nu.lugar_pr_id
+            nr.pasar_param = nu.pasar_param
 
 
 
@@ -897,7 +972,12 @@ class Analizador_sintactico:
             nr.set_lugarStr(nu.get_lugarStr())  # se pilla bien tmb
             nr.lugar_rt_id = nu.lugar_rt_id
             nr.lugar_pr_id = nu.lugar_pr_id
+            nr.pasar_param = nu.pasar_param
 
+        elif nu.get_tipo() == Tipo.t_funcion and nr2.get_tipo() == Tipo.t_ok:
+            nr.set_tipo(nu.get_tipo())
+            nr.set_tipoRet(nu.get_tipoRet())
+            nr.id_func = nu.id_func
 
 
         else:
@@ -966,18 +1046,26 @@ class Analizador_sintactico:
                 u.lugar_if_id = v.lugar_if_id
                 u.lugar_pr_id = v.lugar_pr_id
                 u.lugar_rt_id = v.lugar_rt_id
+                u.pasar_param = v.pasar_param
 
             if u.get_tipo() == Tipo.t_int:
                 u.set_lugarInt(v.get_lugarInt())  # U.lugar := V.lugar
                 u.set_post(v.get_post())
                 u.lugar_pr_id = v.lugar_pr_id
                 u.lugar_rt_id = v.lugar_rt_id
+                u.pasar_param = v.pasar_param
+
 
             if u.get_tipo() == Tipo.t_str:
                 u.set_lugarStr(v.get_lugarStr())  # U.lugar := V.lugar
                 u.lugar_pr_id = v.lugar_pr_id
                 u.lugar_rt_id = v.lugar_rt_id
+                u.pasar_param = v.pasar_param
 
+            if v.get_tipo() == Tipo.t_funcion:
+                #u.set_tipo(v.get_tipo())
+                u.set_tipoRet(v.get_tipoRet())
+                u.id_func = v.id_func
             ''' TDL '''
 
         return u
@@ -1024,6 +1112,7 @@ class Analizador_sintactico:
 
             # Semantico comprueba que los parametros son correctos
             nv1.set_tipo(Tipo.t_ok)
+            antes = 0
             for i, tipo in enumerate(nl.tipo):
                 if tipo != v.tipoParametros[i]:
                     nv1.set_tipo(Tipo.t_error)
@@ -1032,12 +1121,17 @@ class Analizador_sintactico:
                     #buscamos el ra de la funcion que llamamos:
                     #buscamos lo que viene antes del param:
                     miPARAM = nl.param[i]
-                    antes = 0
                     desp_param = 0
                     donde = 'ra'
                     encontrado_en_ra = False
                     if i == 0:
                         antes = 1
+                    else:
+                        for m in range(len(self.ras)):
+                            if self.ras[m][0] == v.id_func:
+                                raf = self.ras[m][1]
+                                antes += raf.cabeza_ra[i][1]
+
                     #buscamos el desp del param:
                     for p in range(len(self.ra.todos)):
                         elem = self.ra.todos[p]
@@ -1088,9 +1182,16 @@ class Analizador_sintactico:
                 id_tipo = self.gTS.buscarTipo(id_pos)
             nv.set_tipo(id_tipo)
 
+            '''
+            for w in range(len(self.ras)):
+                if self.buscarEtiqTs(id_pos) == self.ras[w][0]:
+                    nv.id_func = self.buscarEtiqTs(id_pos)
+            '''
+
             # pasa los tipos de parametros a nv1
             if nv.get_tipo() == Tipo.t_funcion:
                 nv.tipoParametros = self.gTS.buscarTipoParam(id_pos)
+                nv.id_func = self.buscarEtiqTs(id_pos)
 
             # Sintactico
             self.register(37)  # no habiamos registrado lo de V-> idV2
@@ -1183,6 +1284,8 @@ class Analizador_sintactico:
                         nv.set_lugarInt(par_id_valor)
                         nv.lugar_pr_id = par_id_valor
                         nv.lugar_rt_id = par_id_valor
+                        nv.pasar_param = par_id_valor   # para los parametros
+
                     if nv.get_tipo() == Tipo.t_bool:
                         valor_id = self.get_lugar_id(id_pos)
 
@@ -1200,12 +1303,14 @@ class Analizador_sintactico:
                         nv.lugar_if_id = par_id_valor   # para guardar el valor del id del if si solo tiene un id dentro
                         nv.lugar_pr_id = par_id_valor   # guarda el valor del print si printea un id
                         nv.lugar_rt_id = par_id_valor
+                        nv.pasar_param = par_id_valor   # para los parametros
 
                     if nv.get_tipo() == Tipo.t_str:
                         nv.set_lugarStr(self.get_lugar_id(id_pos))
                         par_id_valor = (miIDD, self.get_lugar_id(id_pos))
                         nv.lugar_pr_id = par_id_valor
                         nv.lugar_rt_id = par_id_valor
+                        nv.pasar_param = par_id_valor   # para los parametros
 
             else:
                 nv.set_tipo(Tipo.t_error)
@@ -1318,8 +1423,9 @@ class Analizador_sintactico:
 
                 tempStr.desp = len(self.ra.todos)
 
-                nummm = str(tempStr.count)
-                etiq_cadena = 'etiq_cad' + nummm
+                etiq_cadena = 'etiq_cad' + str(self.nummm)
+                self.nummm += 1
+
 
                 #ayuda = (tempStr.valorStr, nummm)
 
@@ -1328,7 +1434,7 @@ class Analizador_sintactico:
 
                 self.etiq_cadenas.append(par)
 
-                self.emite('temp', '1', tempStr.nombre, etiq_cadena, 'cad', tempStr.desp)
+                self.emite('tempcad', '1', tempStr.nombre, etiq_cadena, valor, tempStr.desp)
 
                 etiq_buc = 'bucle'+str(self.num_buc)
                 etiq_fin = 'fin'+str(self.num_buc)
@@ -1348,8 +1454,9 @@ class Analizador_sintactico:
                 tempStr.nombre = tempStr.nombre + str(tempStr.count)
                 tempStr.desp = len(self.de.temps)
 
-                nummm = str(tempStr.count)
-                etiq_cadena = 'etiq_cad'+nummm
+
+                etiq_cadena = 'etiq_cad'+ str(self.nummm)
+                self.nummm += 1
 
                 par = (etiq_cadena,tempStr.valorStr)
 
@@ -1358,7 +1465,7 @@ class Analizador_sintactico:
 
                 self.de.temps.append(tempStr)
 
-                self.emite('temp', '4', tempStr.nombre, etiq_cadena, 'cad', tempStr.desp)
+                self.emite('temp', '5', tempStr.nombre, etiq_cadena, valor, tempStr.desp)
 
                 etiq_buc = 'bucle' + str(self.num_buc)
                 etiq_fin = 'fin' + str(self.num_buc)
@@ -1513,8 +1620,9 @@ class Analizador_sintactico:
 
             ''' TDL '''
 
-            nq.param.append(self.get_lugar_id(id_pos))
-            nq.long = 1
+            #nq.param.append(self.get_lugar_id(id_pos))
+            nq.param.append(ne.pasar_param[0])
+            nq.long += 1
             ''' TDL '''
 
             # Semantico
@@ -1524,7 +1632,7 @@ class Analizador_sintactico:
 
             ''' TDL '''
             nq.long = nq.long + nq1.long            # aqui pasa algo raro nq1.long tendria que ser 1 y es 0
-            nq.param += nq1.param                   # CREO QUE ESTO ES INUTIL Y SOLO HABRAI QUE IGUALARLASSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+            nq.param = nq1.param                   # CREO QUE ESTO ES INUTIL Y SOLO HABRAI QUE IGUALARLASSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
             ''' TDL '''
 
 
@@ -1554,15 +1662,20 @@ class Analizador_sintactico:
             # Comprueba que los tipos a ambos lados de la asignacion sean iguales
             if ne.get_tipo() == Tipo.t_error:
                 ns1.set_tipo(Tipo.t_error)
-            elif s.get_tipo() == ne.get_tipo():
-                ns1.set_tipo(Tipo.t_ok)
-                ''' TDL '''
-                if ne.get_tipo() == Tipo.t_int:
-                    ns1.set_lugarInt(ne.get_lugarInt())
-                if ne.get_tipo() == Tipo.t_bool:
-                    ns1.set_lugarBool(ne.get_lugarBool())
-                if ne.get_tipo() == Tipo.t_str:
-                    ns1.set_lugarStr(ne.get_lugarStr())
+            elif s.get_tipo() == ne.get_tipo() or s.get_tipo() == ne.get_tipoRet():
+                if ne.get_tipo() == Tipo.t_funcion:
+                    ns1.set_tipo(ne.get_tipo())
+                    ns1.set_tipoRet(ne.get_tipoRet())
+                    ns1.id_func = ne.id_func
+                else:
+                    ns1.set_tipo(Tipo.t_ok)
+                    ''' TDL '''
+                    if ne.get_tipo() == Tipo.t_int:
+                        ns1.set_lugarInt(ne.get_lugarInt())
+                    if ne.get_tipo() == Tipo.t_bool:
+                        ns1.set_lugarBool(ne.get_lugarBool())
+                    if ne.get_tipo() == Tipo.t_str:
+                        ns1.set_lugarStr(ne.get_lugarStr())
 
                 ns1.set_asig('asig')
                 ns1.set_post(ne.get_post())
@@ -1592,12 +1705,49 @@ class Analizador_sintactico:
             # Comprueba que los tipos de los parametros de la llamada a funcion sean iguales a los de la funcion
             nl.tipo.pop()
             ns1.set_tipo(Tipo.t_ok)
+            antes = 0
             for i, tipo in enumerate(nl.tipo):
                 if tipo != s.tipoParametros[i]:
                     ns1.set_tipo(Tipo.t_error)
                     self.gestor_errores.addError(8, self.analizador_lexico.contador_linea)
                 else:
-                    self.emite('param', nl.param[i], '', '', '', '')
+                    miParam2 = nl.param[i]
+                    desp_param2 = 0
+                    donde2 = 'ra'
+                    encontrado_ra_2 = False
+                    if i == 0:
+                        antes = 1
+                    else:
+                        for m in range(len(self.ras)):
+                            if self.ras[m][0] == s.id_func:
+                                raf = self.ras[m][1]
+                                antes += raf.cabeza_ra[i][1]
+                    #busacmos el desp del param
+                    for p in range(len(self.ra.todos)):
+                        elem = self.ra.todos[p]
+                        if self.verificar_elemento(elem) and elem[0] == miParam2:
+                            desp_param2 = p
+                            encontrado_ra_2 = True
+                        elif isinstance(elem, temporales) and nl.tipo[i] == Tipo.t_int and elem.valorInt == miParam2:
+                            desp_param2 = p
+                            encontrado_ra_2 = True
+                        elif isinstance(elem, temporales) and nl.tipo[i] == Tipo.t_bool and elem.valorB == miParam2:
+                            desp_param2 = p
+                            encontrado_ra_2 = True
+                        elif isinstance(elem, temporales) and nl.tipo[i] == Tipo.t_str and elem.valorStr == miParam2:
+                            desp_param2 = p
+                            encontrado_ra_2 = True
+
+                    if not encontrado_ra_2:
+                        for j in range(len(self.de.temps)):
+                            idd = self.de.temps[j]
+                            if self.verificar_elemento(idd) and idd[0] == nl.param[i]:
+                                desp_param2 = j
+                                donde2 = 'ra_de'
+
+                    #self.emite('param', nl.param[i], '', '', '', '')
+                    self.emite('param', nl.param[i], desp_param2, antes, donde2, '')
+
                 ''' TDL '''
 
                 # TENDRIA QUE ESTAR EN FOR DE 1 HASTA L.LONG, AQUI NO SE SI ESTA BIEN PUESTO
@@ -1637,6 +1787,7 @@ class Analizador_sintactico:
             # Si es una funcion asigna el tipo de la variable al retorno de la funcion
             if ns.get_tipo() == Tipo.t_funcion:
                 ns.tipoParametros = self.gTS.buscarTipoParam(id_pos)
+                ns.id_func = self.buscarEtiqTs(id_pos)
 
             # Sintactico
             self.register(25)
@@ -1647,10 +1798,25 @@ class Analizador_sintactico:
             ''' TDL '''
             if ns.get_tipo() == Tipo.t_funcion:
                 valor = self.buscarEtiqTs(id_pos)
-                self.emite('call', self.buscarEtiqTs(id_pos), '', '', '','')
+                self.emite('call', ns.id_func, '', '', '','')
 
             elif ns1.get_asig() == 'asig' and ns1.get_post() != 'postAsig' and not self.entro_not_asig:
-                if ns.get_tipo() == Tipo.t_int:
+                if ns1.get_tipo() == Tipo.t_funcion:
+                    func = ns1.id_func
+                    id_ig = self.buscarVarTs(id_pos)
+
+                    if ns.get_tipo() == Tipo.t_int:
+                        self.asig_func(ns.get_tipo(), func, id_ig)
+
+                    if ns.get_tipo() == Tipo.t_bool:
+                        self.asig_func(ns.get_tipo(), func, id_ig)
+
+                    if ns.get_tipo() == Tipo.t_str:
+                        self.asig_func(ns.get_tipo(), func, id_ig)
+
+
+
+                elif ns.get_tipo() == Tipo.t_int:
                     valorHH = ns1.get_lugarInt()
                     self.set_lugar_id(id_pos, valorHH)
 
@@ -1694,7 +1860,7 @@ class Analizador_sintactico:
 
 
 
-                if ns.get_tipo() == Tipo.t_bool:
+                elif ns.get_tipo() == Tipo.t_bool:
 
                     valora = ns1.get_lugarBool()
                     self.set_lugar_id(id_pos, valora)
@@ -1727,7 +1893,7 @@ class Analizador_sintactico:
                         for i in range(len(self.de.temps)):
                             if self.verificar_elemento(self.de.temps[i]) and self.de.temps[i][0] == parid[0]:
                                 despV = i
-                                valorV = self.de.temps[i]
+                                valorV = self.de.temps[i][0]
                                 self.de.temps[i] = parid
                                 break
 
@@ -1735,7 +1901,7 @@ class Analizador_sintactico:
 
 
 
-                if ns.get_tipo() == Tipo.t_str:
+                elif ns.get_tipo() == Tipo.t_str:
                     self.set_lugar_id(id_pos, ns1.get_lugarStr())
                     self.emite(self.buscarVarTs(id_pos), ':=', ns1.get_lugarStr(), '', '', '')
 
@@ -1802,7 +1968,7 @@ class Analizador_sintactico:
                         for i in range(len(self.de.temps)):
                             if self.verificar_elemento(self.de.temps[i]) and self.de.temps[i][0] == parid[0]:
                                 despV = i
-                                valorV = self.de.temps
+                                valorV = self.de.temps[i][0]
                                 nuevopar = (parid[0], ns1.get_lugarStr()[1])
                                 self.de.temps[i] = nuevopar
                                 otroPar = (self.de.locales[parid[0]][0], ns1.get_lugarStr()[1])
@@ -1810,23 +1976,6 @@ class Analizador_sintactico:
                                 break
 
                         self.emite('temp', '3', valorV, temppp, despT, despV)
-
-
-                ''' aqui esto no va 
-
-                if ns.get_tipo() == Tipo.t_int:
-                    # ns.set_lugarInt() -> poner el .lugar al tipo de retorno de la func ??
-                    self.emite(ns.get_lugarInt(), '=', 'call', self.buscarEtiqTs(id_pos), '',
-                                   '')  # aqui busca la etiqueta/nombre de la funcion
-                if ns.get_tipo() == Tipo.t_bool:
-                    self.emite(ns.get_lugarBool(), '=', 'call', self.buscarEtiqTs(id_pos), '',
-                                   '')  # aqui busca la etiqueta/nombre de la funcion
-                if ns.get_tipo() == Tipo.t_str:
-                    self.emite(ns.get_lugarStr(), '=', 'call', self.buscarEtiqTs(id_pos), '',
-                                   '')  # aqui busca la etiqueta/nombre de la funcion
-                '''
-
-
                 ns1.set_asig('')
 
             elif ns.get_tipo() == Tipo.t_ok:  #
@@ -1864,9 +2013,16 @@ class Analizador_sintactico:
             if ne.get_tipo() == Tipo.t_str:
                 #self.cosa_para_pr_rt(ne.get_tipo(), ne.get_lugarStr(), ne.lugar_pr_id, 'print')
                 if self.es_ra():
-                    self.emite('print', ne.get_lugarStr()[0], 'ra', '', 'string', '')
+                    if ne.lugar_pr_id == None:
+                        for i in range(len(self.ra.todos)):
+                            if isinstance(self.ra.todos[i], temporales) and self.ra.todos[i].valorStr == ne.get_lugarStr()[1]:
+                                prrr = self.ra.todos[i].nombre
+                                break
+                    else:
+                        prrr = ne.lugar_pr_id[0]
+                    self.emite('printcad', ne.get_lugarStr()[0], 'ra', prrr, 'string', '')
                 else:
-                    self.emite('print', ne.get_lugarStr()[0],'de','','string','')
+                    self.emite('printcad', ne.get_lugarStr()[0],'de',ne.lugar_pr_id[0],'string','')
 
             ''' TDL '''
 
@@ -1928,12 +2084,15 @@ class Analizador_sintactico:
                 ''' TDL '''
                 if nx.get_tipo() == Tipo.t_int:
                     self.cosa_para_pr_rt(nx.get_tipo(), nx.get_lugarInt(), nx.lugar_rt_id, 'return')
+                    self.ra.VD = nx.get_lugarInt()
 
                 if nx.get_tipo() == Tipo.t_bool:
                     self.cosa_para_pr_rt(nx.get_tipo(), nx.get_lugarBool(), nx.lugar_rt_id, 'return')
+                    self.ra.VD = nx.get_lugarBool()
 
                 if nx.get_tipo() == Tipo.t_str:
                     self.cosa_para_pr_rt(nx.get_tipo(), nx.get_lugarStr(), nx.lugar_rt_id, 'return')
+                    self.ra.VD = nx.get_lugarStr()
                 ''' TDL '''
 
             else:
@@ -2221,9 +2380,9 @@ class Analizador_sintactico:
             self.gTS.insertarTipoParam(id_pos, na.tipo)
 
             ''' TDL '''
-            self.ra = Registro_de_activacion(0,0,1,{},self.buscarEtiqTs(id_funcion),{}, {},[],0,[])
-            self.ra.todos.append('EM')
+            self.ra = Registro_de_activacion(0,0,1,{},self.buscarEtiqTs(id_funcion),{}, {},[],0,[], None)
             par_EM = ('EM', 1)
+            self.ra.todos.append('EM')
             self.ra.cabeza_ra.append(par_EM)
             for i in range(len(na.param)):
                 self.ra.locales[na.param[i]] = None
@@ -2342,6 +2501,8 @@ class Analizador_sintactico:
                     # na.set_long(na.get_long() + nk.get_long())
                     na.param.extend(nk.param)
                     na.long = na.long + nk.long
+                    na.long = len(na.param)
+                    nk.param.clear()
 
                     break
 
@@ -2479,6 +2640,11 @@ class Analizador_sintactico:
                 naame = "tam_RA_"+str(self.ras[i][0])
                 tam = 0
                 ra_now = self.ras[i][1]
+                if ra_now.VD != None:
+                    par_VD = ('VD',(1, ra_now.VD))
+                    ra_now.todos.append(par_VD)
+                    tam += 1
+
                 for i in range(len(ra_now.cabeza_ra)):
                     tam += ra_now.cabeza_ra[i][1]
 
@@ -2503,6 +2669,7 @@ class Analizador_sintactico:
                         tam += 1
                     else:
                         tam += 32
+
 
                 self.cuarteto(naame, tam, '', '', 103)
                 #self.ras[i][1]
@@ -2556,7 +2723,7 @@ class Analizador_sintactico:
             # creamos el cuarteto de una etiqueta
             # Asi metemos las cosas en el fichero
             with open('./output/emites.txt', 'a') as f:
-                f.write(f"(:, {string} ,,)\n")
+                f.write(f"(:,_,_, {string})\n")
             cod = 1  # para entender que queremos emitir una etiqueta
             # printeamos en un fich
             # llamamos a la funcion cuarteto
@@ -2582,22 +2749,29 @@ class Analizador_sintactico:
         if string == 'return':
             with open('./output/emites.txt', 'a') as f:
                 f.write(f"(return,_,_,{string2})\n")
-            cod = 3
 
             if string2 != '_':
                 ''' GCI'''
                 with open('./output/GCI.txt', 'a') as f:
                     f.write(f"return {string2} \n")
                 # llamamos a cuarteto
+                cod = 3
                 self.cuarteto(string, '', string6, string2, cod)
             else:
                 ''' GCI'''
                 with open('./output/GCI.txt', 'a') as f:
                     f.write(f"return \n")
+                cod = 32
 
-        if string == 'print':
-            with open('./output/emites.txt', 'a') as f:
-                f.write(f"(print,_,_, {string2})\n")            # aqui me imprime una temporal pero quiero x ARREGLAR
+                self.cuarteto(string, '', string6, string2, cod)
+
+        if string == 'print' or string == 'printcad':
+            if string == 'printcad':
+                with open('./output/emites.txt', 'a') as f:
+                    f.write(f"(print,_,_, {string4})\n")
+            else:
+                with open('./output/emites.txt', 'a') as f:
+                    f.write(f"(print,_,_, {string2})\n")            # aqui me imprime una temporal pero quiero x ARREGLAR
 
             cod = 4
 
@@ -2618,22 +2792,27 @@ class Analizador_sintactico:
             cod = 5
             self.cuarteto(string3, string4, string5, string6, cod)
 
-        if string2 == ':=' and string3 == 'call':
+        if string == 'callAsig1' or string == 'callAsig32':
             with open('./output/emites.txt', 'a') as f:
-                f.write(f"(call_f,{string4},_, {string2})\n")
+                f.write(f"(call,{string4},_, {string3})\n")
 
             cod = 6
 
             ''' GCI'''
             with open('./output/GCI.txt', 'a') as f:
-                f.write(f"{string2} (o temp nose) := {string4} /  TENDRIA QUE SER UNA TEMP -> VER LUEGO COMO HACER )\n")
+                f.write(f"{string3} (o temp nose) := {string4} /  TENDRIA QUE SER UNA TEMP -> VER LUEGO COMO HACER )\n")
 
             # llamamos a cuarteto
-            self.cuarteto('call_f', string4, '_', string2, cod)
+            if string == 'callAsig1':
+                cod = 61
+            else:
+                cod = 632
+
+            self.cuarteto(string5, string6, string4 , string2, cod)
 
         if string == 'param':
             with open('./output/emites.txt', 'a') as f:
-                f.write(f"({string},{string2},,)\n")
+                f.write(f"({string},{string2},_,_)\n")
 
             ''' GCI'''
             with open('./output/GCI.txt', 'a') as f:
@@ -2681,7 +2860,7 @@ class Analizador_sintactico:
         if string2 == 'igResta':
             cod = 24
             with open('./output/emites.txt', 'a') as f:
-                f.write(f"(-,{string},{string5},{string})\n")
+                f.write(f"(-,{string3},{string5},{string})\n")
 
             #self.cuarteto(string3, string4, string5, string6, cod)
 
@@ -2748,15 +2927,26 @@ class Analizador_sintactico:
             # llamamos a cuarteto
             self.cuarteto('call', string2, '_', '_', cod)
 
-        if string == 'temp' and string2 == '1':
-            cod = 16
+        if string == 'temp' and string2 == '1' or string == 'tempcad' and string2 == '1':
+            if string == 'tempcad':
+                with open('./output/emites.txt', 'a') as f:
+                    f.write(f"(:=, {string5},_,{string3})\n")
+            else:
+                with open('./output/emites.txt', 'a') as f:
+                    f.write(f"(:=, {string4},_,{string3})\n")
+
             with open('./output/GCI.txt', 'a') as f:
                 f.write(f"{string3} := {string4}   \n")
+
+            cod = 16
 
             #if string5 != 'cad':
             self.cuarteto(string3, string4,'_',string6,cod)
 
         if string2 == '2' and string == 'temp' or string == 'tempde':
+            with open('./output/emites.txt', 'a') as f:
+                f.write(f"(:=, {string4},_,{string3})\n")
+
             if string == 'temp':
                 cod = 17
                 with open('./output/GCI.txt', 'a') as f:
@@ -2772,13 +2962,22 @@ class Analizador_sintactico:
 
         if string == 'temp' and string2 == '3':
             cod = 18
+            with open('./output/emites.txt', 'a') as f:
+                f.write(f"(:=, {string4},_,{string3})\n")
             with open('./output/GCI.txt', 'a') as f:
                 f.write(f"{string3} := {string4}   \n")
 
             self.cuarteto(string3, string4, string5, string6, cod)
 
-        if string == 'temp' and string2 == '4':
+        if string == 'temp' and string2 == '4' or string == 'temp' and string2 == '5':
             cod = 19
+            if string2 == '5':
+                with open('./output/emites.txt', 'a') as f:
+                    f.write(f"(:=, {string5},_,{string3})\n")
+            else:
+                with open('./output/emites.txt', 'a') as f:
+                    f.write(f"(:=, {string4},_,{string3})\n")
+
             with open('./output/GCI.txt', 'a') as f:
                 f.write(f"{string3} := {string4}   \n")
 
@@ -2842,6 +3041,10 @@ class Analizador_sintactico:
             with open('./output/CO.ens', 'a') as f:
                 f.write(f"  BR[.IX]\n")
 
+        if cod == 32:
+            with open('./output/CO.ens', 'a') as f:
+                f.write(f"  BR [.IX]\n")
+
         if cod == 4:
             # print
             if string1 == 'de' or string1 == 'ra_de':
@@ -2849,7 +3052,7 @@ class Analizador_sintactico:
                     with open('./output/CO.ens', 'a') as f:
                         f.write(f"  WRSTR /{string2}\n")
 
-                elif isinstance(string3, str) and string3[0].isdigit() or isinstance(string3, int):
+                elif isinstance(string3, str) and string3[0].isdigit() or isinstance(string3, int) or string2 == Tipo.t_int or string2 == Tipo.t_bool:
                     with open('./output/CO.ens', 'a') as f:
                         f.write(f"  WRINT #{string4}[.IY]\n")
 
@@ -2882,26 +3085,42 @@ class Analizador_sintactico:
                     with open('./output/CO.ens', 'a') as f:
                         f.write(f"  INSTR #{string1}[.IY]\n")
 
-        if cod == 6:
+        if cod == 6 or cod == 61 or cod == 632:
             # call y asignacion
+            if cod == 61:
+                tipo = 1
+            elif cod == 623:
+                tipo = 32
+
             with open('./output/CO.ens', 'a') as f:
-                f.write(f"  MOVE #dir_ret, #tam_RA_{self.ra.etiq}[.IX]\n")
+                dirr = "dir_ret"+str(self.count_diret)
+                self.count_diret += 1
+
+                f.write(f"  MOVE #{dirr}, #tam_RA_{self.ra.etiq}[.IX]\n")
                 f.write(f"  ADD #tam_RA_{self.ra.etiq}, .IX\n")
-                f.write(f"  BR ${self.ra.etiq}\n")
-                f.write(f"dir_ret: \n")
-                f.write(f"  SUB #tam_RA_{self.ra.etiq}, #tipo_VD \n")
+                f.write(f"  MOVE .A, .IX\n")
+                f.write(f"  BR ${string3}\n")
+                f.write(f"{dirr}: \n")
+                f.write(f"  SUB #tam_RA_{self.ra.etiq}, #{tipo} \n")
                 f.write(f"  ADD .A, .IX \n")
                 f.write(f"  MOVE [.A], [.R9] \n")
                 f.write(f"  SUB .IX, #tam_RA_{self.ra.etiq} \n")
                 f.write(f"  MOVE .A, .IX         \n")
-                f.write(f"  MOVE .R9, #num[.IX]        \n")
+                f.write(f"  MOVE .R9, #{string2}[.IX]        \n")
+            if string4 == 'de':
+                with open('./output/CO.ens', 'a') as f:
+                    f.write(f"  MOVE #{string2}[.IX], #{string1}[.IY]        \n")
+            else:
+                with open('./output/CO.ens', 'a') as f:
+                    f.write(f"  MOVE #{string2}[.IX], #{string1}[.IX]        \n")
+
 
         if cod == 7:
             # param
             with open('./output/CO.ens', 'a') as f:
-                f.write(f"  ADD #tam_RA_{self.ra.etiq}, .IX     ; params \n")
-                f.write(f"  ADD #{string4}, .A      ; params  \n")
-                f.write(f"  MOVE #{string3}[.IX], [.A]       ; params  \n")
+                f.write(f"  ADD #tam_RA_{self.ra.etiq}, .IX             ; params \n")
+                f.write(f"  ADD #{string4}, .A                          ; params  \n")
+                f.write(f"  MOVE #{string3}[.IX], [.A]                  ; params  \n")
 
         if cod == 8:
             # menor
@@ -2963,13 +3182,16 @@ class Analizador_sintactico:
                 f.write(f"BR ${string4}\n")
 
         if cod == 15:
+            dirr2 = 'dir_ret'+str(self.count_diret)
+            self.count_diret += 1
+
             with open('./output/CO.ens', 'a') as f:
-                f.write(f"  MOVE #Dir_ret, #tam_RA_{self.ra.etiq}[.IX]          ; call \n")
+                f.write(f"  MOVE #{dirr2}, #tam_RA_{self.ra.etiq}[.IX]          ; call \n")
                 f.write(f"  ADD #tam_RA_{self.ra.etiq}, .IX\n")
                 f.write(f"  MOVE .A, .IX \n")
                 f.write(f"  BR ${string2}\n")
 
-                f.write(f"Dir_ret: \n")
+                f.write(f"{dirr2}: \n")
                 f.write(f"  SUB #tam_RA_{self.ra.etiq}, .IX\n")
                 f.write(f"  MOVE .A, .IX\n")
 
@@ -2988,7 +3210,7 @@ class Analizador_sintactico:
 
         if cod == 18:
             with open('./output/CO.ens', 'a') as f:
-                f.write(f"  MOVE #{string3}[.IY], #{string4}[.IY] ;ERES TUU\n") # aqui seriaaa he inversado los desp
+                f.write(f"  MOVE #{string3}[.IY], #{string4}[.IY] \n") # aqui seriaaa he inversado los desp
 
         if cod == 19:
             with open('./output/CO.ens', 'a') as f:
